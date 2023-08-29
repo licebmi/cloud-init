@@ -44,8 +44,6 @@
         "power-state-change",
         "power_state_change",
         "puppet",
-        "refresh-rmc-and-interface",
-        "refresh_rmc_and_interface",
         "reset-rmc",
         "reset_rmc",
         "resizefs",
@@ -141,6 +139,14 @@
         "name": {
           "description": "The user's login name. Required otherwise user creation will be skipped for this user.",
           "type": "string"
+        },
+        "doas": {
+          "description": "List of doas rules to add for a user. doas or opendoas must be installed for rules to take effect.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
         },
         "expiredate": {
           "default": null,
@@ -1421,7 +1427,7 @@
             },
             "variant": {
               "type": "string",
-              "description": "Optional. Keyboard variant. Corresponds to XKBVARIANT."
+              "description": "Required for Alpine Linux, optional otherwise. Keyboard variant. Corresponds to XKBVARIANT."
             },
             "options": {
               "type": "string",
@@ -1485,6 +1491,10 @@
             "client": {
               "type": "object",
               "additionalProperties": true,
+              "required": [
+                "account_name",
+                "computer_title"
+              ],
               "properties": {
                 "url": {
                   "type": "string",
@@ -1680,7 +1690,7 @@
             },
             "preseed": {
               "type": "string",
-              "description": "Opaque LXD preseed YAML config passed via stdin to the command: lxd init --preseed. See: https://linuxcontainers.org/lxd/docs/master/preseed/ or lxd init --dump for viable config. Can not be combined with either ``lxd.init`` or ``lxd.bridge``."
+              "description": "Opaque LXD preseed YAML config passed via stdin to the command: lxd init --preseed. See: https://documentation.ubuntu.com/lxd/en/latest/howto/initialize/#non-interactive-configuration or lxd init --dump for viable config. Can not be combined with either ``lxd.init`` or ``lxd.bridge``."
             }
           }
         }
@@ -1845,6 +1855,23 @@
               },
               "uniqueItems": true,
               "description": "List of ntp servers. If both pools and servers are\nempty, 4 default pool servers will be provided with\nthe format ``{0-3}.{distro}.pool.ntp.org``."
+            },
+            "peers": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "format": "hostname"
+              },
+              "uniqueItems": true,
+              "description": "List of ntp peers."
+            },
+            "allow": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true,
+              "description": "List of CIDRs to allow"
             },
             "ntp_client": {
               "type": "string",
@@ -2357,6 +2384,23 @@
                   }
                 }
               ]
+            },
+            "install_rsyslog": {
+              "default": false,
+              "description": "Install rsyslog. Default: ``false``",
+              "type": "boolean"
+            },
+            "check_exe": {
+              "type": "string",
+              "description": "The executable name for the rsyslog daemon.\nFor example, ``rsyslogd``, or ``/opt/sbin/rsyslogd`` if the rsyslog binary is in an unusual path. This is only used if ``install_rsyslog`` is ``true``. Default: ``rsyslogd``"
+            },
+            "packages": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "uniqueItems": true,
+              "description": "List of packages needed to be installed for rsyslog. This is only used if ``install_rsyslog`` is ``true``. Default: ``[rsyslog]``"
             }
           }
         }
@@ -3079,8 +3123,7 @@
                 "$ref": "#/$defs/users_groups.user"
               }
             ]
-          },
-          "minItems": 1
+          }
         }
       }
     },

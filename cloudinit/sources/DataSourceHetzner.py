@@ -57,6 +57,7 @@ class DataSourceHetzner(sources.DataSource):
 
         try:
             with EphemeralDHCPv4(
+                self.distro,
                 iface=net.find_fallback_nic(),
                 connectivity_url_data={
                     "url": BASE_URL_V1 + "/metadata/instance-id",
@@ -85,7 +86,7 @@ class DataSourceHetzner(sources.DataSource):
         # The fallout is that in the event of b64 encoded user-data,
         # /var/lib/cloud-init/cloud-config.txt will not be identical to the
         # user-data provided.  It will be decoded.
-        self.userdata_raw = hc_helper.maybe_b64decode(ud)
+        self.userdata_raw = util.maybe_b64decode(ud)
         self.metadata_full = md
 
         # hostname is name provided by user at launch.  The API enforces it is
@@ -159,6 +160,3 @@ datasources = [
 # Return a list of data sources that match this set of dependencies
 def get_datasource_list(depends):
     return sources.list_from_depends(depends, datasources)
-
-
-# vi: ts=4 expandtab

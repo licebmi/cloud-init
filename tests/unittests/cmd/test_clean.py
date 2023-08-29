@@ -77,7 +77,7 @@ class TestClean:
         ensure_dir(clean_paths.clean_dir)
         assert artifact_file.exists() is False, f"Unexpected {artifact_file}"
         clean_script = clean_paths.clean_dir.join("1.sh")
-        clean_script.write(f"#!/bin/bash\ntouch {artifact_file}\n")
+        clean_script.write(f"#!/bin/sh\ntouch {artifact_file}\n")
         clean_script.chmod(mode=0o755)
         with mock.patch.object(
             cloudinit.settings, "CLEAN_RUNPARTS_DIR", clean_paths.clean_dir
@@ -123,12 +123,15 @@ class TestClean:
         symlink = clean_paths.cloud_dir.join("mylink")
         sym_link(dir1.strpath, symlink.strpath)
 
-        retcode = wrap_and_call(
-            "cloudinit.cmd.clean",
-            {"Init": {"side_effect": init_class}},
-            clean.remove_artifacts,
-            remove_logs=False,
-        )
+        with mock.patch.object(
+            cloudinit.settings, "CLEAN_RUNPARTS_DIR", clean_paths.clean_dir
+        ):
+            retcode = wrap_and_call(
+                "cloudinit.cmd.clean",
+                {"Init": {"side_effect": init_class}},
+                clean.remove_artifacts,
+                remove_logs=False,
+            )
         assert 0 == retcode
         for path in (dir1, symlink):
             assert path.exists() is False, f"Unexpected {path} found"
@@ -146,12 +149,15 @@ class TestClean:
         for _dir in dirs:
             ensure_dir(_dir)
 
-        retcode = wrap_and_call(
-            "cloudinit.cmd.clean",
-            {"Init": {"side_effect": init_class}},
-            clean.remove_artifacts,
-            remove_logs=False,
-        )
+        with mock.patch.object(
+            cloudinit.settings, "CLEAN_RUNPARTS_DIR", clean_paths.clean_dir
+        ):
+            retcode = wrap_and_call(
+                "cloudinit.cmd.clean",
+                {"Init": {"side_effect": init_class}},
+                clean.remove_artifacts,
+                remove_logs=False,
+            )
         assert 0 == retcode
         for expected_dir in dirs[:2]:
             assert expected_dir.exists() is True, f"Missing {expected_dir}"
@@ -171,13 +177,16 @@ class TestClean:
         for _dir in dirs:
             ensure_dir(_dir)
 
-        retcode = wrap_and_call(
-            "cloudinit.cmd.clean",
-            {"Init": {"side_effect": init_class}},
-            clean.remove_artifacts,
-            remove_logs=False,
-            remove_seed=True,
-        )
+        with mock.patch.object(
+            cloudinit.settings, "CLEAN_RUNPARTS_DIR", clean_paths.clean_dir
+        ):
+            retcode = wrap_and_call(
+                "cloudinit.cmd.clean",
+                {"Init": {"side_effect": init_class}},
+                clean.remove_artifacts,
+                remove_logs=False,
+                remove_seed=True,
+            )
         assert 0 == retcode
         assert (
             clean_paths.cloud_dir.exists() is True

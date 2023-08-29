@@ -38,6 +38,7 @@ class TestManagePuppetServices(CiTestCase):
             mock.call(
                 ["systemctl", "enable", "puppet-agent.service"],
                 capture=True,
+                rcs=None,
             )
         ]
         self.assertIn(expected_calls, m_subp.call_args_list)
@@ -51,6 +52,7 @@ class TestManagePuppetServices(CiTestCase):
             mock.call(
                 ["systemctl", "start", "puppet-agent.service"],
                 capture=True,
+                rcs=None,
             )
         ]
         self.assertIn(expected_calls, m_subp.call_args_list)
@@ -62,10 +64,12 @@ class TestManagePuppetServices(CiTestCase):
             mock.call(
                 ["systemctl", "enable", "puppet-agent.service"],
                 capture=True,
+                rcs=None,
             ),
             mock.call(
                 ["systemctl", "enable", "puppet.service"],
                 capture=True,
+                rcs=None,
             ),
         ]
         self.assertEqual(expected_calls, m_subp.call_args_list)
@@ -73,7 +77,6 @@ class TestManagePuppetServices(CiTestCase):
 
 @mock.patch("cloudinit.config.cc_puppet._manage_puppet_services")
 class TestPuppetHandle(CiTestCase):
-
     with_logs = True
 
     def setUp(self):
@@ -460,7 +463,7 @@ class TestInstallPuppetAio:
                 [mock.call([mock.ANY, "--cleanup"], capture=False)],
                 [
                     mock.call(
-                        url="https://raw.githubusercontent.com/puppetlabs/install-puppet/main/install.sh",  # noqa: 501
+                        url="https://raw.githubusercontent.com/puppetlabs/install-puppet/main/install.sh",  # noqa: E501
                         retries=5,
                     )
                 ],
