@@ -1,10 +1,13 @@
 # This file is part of cloud-init. See LICENSE file for license information.
 import ipaddress
+from typing import Dict
 from unittest import mock
+from unittest.mock import MagicMock
 
 import pytest
+import yaml
 
-from cloudinit import log, safeyaml, util
+from cloudinit import lifecycle
 from cloudinit.net import network_state
 from cloudinit.net.netplan import Renderer as NetplanRenderer
 from cloudinit.net.renderers import NAME_TO_RENDERER
@@ -66,9 +69,10 @@ class TestNetworkStateParseConfig(CiTestCase):
         super(TestNetworkStateParseConfig, self).setUp()
         nsi_path = netstate_path + ".NetworkStateInterpreter"
         self.add_patch(nsi_path, "m_nsi")
+        self.m_nsi: MagicMock
 
     def test_missing_version_returns_none(self):
-        ncfg = {}
+        ncfg: Dict[str, int] = {}
         with self.assertRaises(RuntimeError):
             network_state.parse_net_config_data(ncfg)
 
@@ -214,10 +218,8 @@ class TestNetworkStateParseConfigV2:
         In netplan targets we perform a passthrough and the warning is not
         needed.
         """
-        log.setupLogging()
-
-        util.deprecate._log = set()  # type: ignore
-        ncfg = safeyaml.load(
+        lifecycle.deprecate.__dict__["log"] = set()
+        ncfg = yaml.safe_load(
             cfg.format(
                 gateway4="gateway4: 10.54.0.1",
                 gateway6="gateway6: 2a00:1730:fff9:100::1",
@@ -243,8 +245,8 @@ class TestNetworkStateParseConfigV2:
 class TestNetworkStateParseNameservers:
     def _parse_network_state_from_config(self, config):
         with mock.patch("cloudinit.net.network_state.get_interfaces_by_mac"):
-            yaml = safeyaml.load(config)
-            return network_state.parse_net_config_data(yaml["network"])
+            config = yaml.safe_load(config)
+            return network_state.parse_net_config_data(config["network"])
 
     def test_v1_nameservers_valid(self):
         config = self._parse_network_state_from_config(
@@ -258,7 +260,10 @@ class TestNetworkStateParseNameservers:
         # If an interface was specified, DNS should be part of the interface
         for iface in config.iter_interfaces():
             if iface["name"] == "eth1":
-                assert iface["dns"]["addresses"] == ["192.168.1.1", "8.8.8.8"]
+                assert iface["dns"]["nameservers"] == [
+                    "192.168.1.1",
+                    "8.8.8.8",
+                ]
                 assert iface["dns"]["search"] == ["spam.local"]
             else:
                 assert "dns" not in iface
@@ -287,15 +292,11 @@ class TestNetworkStateParseNameservers:
                     "search": ["foo.local", "bar.local"],
                 }
 
-        # Ensure DNS defined on interface also exists globally (since there
-        # is no global DNS definitions in v2)
-        assert ["4.4.4.4", "8.8.8.8"] == sorted(config.dns_nameservers)
-        assert [
-            "bar.local",
-            "eggs.local",
-            "foo.local",
-            "spam.local",
-        ] == sorted(config.dns_searchdomains)
+        # Ensure DNS defined on interface does not exist globally
+        for server in ["4.4.4.4", "8.8.8.8"]:
+            assert server not in config.dns_nameservers
+        for search in ["bar.local", "eggs.local", "foo.local", "spam.local"]:
+            assert search not in config.dns_searchdomains
 
 
 class TestNetworkStateHelperFunctions(CiTestCase):

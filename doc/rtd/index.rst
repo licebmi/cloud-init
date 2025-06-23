@@ -4,12 +4,12 @@ Cloud-init documentation
 ########################
 
 ``Cloud-init`` is the *industry standard* multi-distribution method for
-cross-platform cloud instance initialisation. It is supported across all major
+cross-platform cloud instance initialization. It is supported across all major
 public cloud providers, provisioning systems for private cloud infrastructure,
 and bare-metal installations.
 
 During boot, ``cloud-init`` identifies the cloud it is running on and
-initialises the system accordingly. Cloud instances will automatically be
+initializes the system accordingly. Cloud instances will automatically be
 provisioned during first boot with networking, storage, SSH keys, packages
 and various other system aspects already configured.
 
@@ -19,6 +19,10 @@ and connecting to it so that it works as expected.
 For cloud users, ``cloud-init`` provides no-install first-boot configuration
 management of a cloud instance. For cloud providers, it provides instance setup
 that can be integrated with your cloud.
+
+If you would like to read more about what cloud-init is, what it does and how
+it works, check out our :ref:`high-level introduction<introduction>`
+to the tool.
 
 -----
 
@@ -71,7 +75,7 @@ Project and community
 projects, contributions, suggestions, fixes and constructive feedback.
 
 * Read our `Code of Conduct`_
-* Ask questions in the ``#cloud-init`` `IRC channel on Libera`_
+* Ask questions in the ``#cloud-init`` `IRC channel on Libera <IRC_>`_
 * Follow announcements or ask a question on `the cloud-init Discourse forum`_
 * Join the `cloud-init mailing list`_
 * :ref:`Contribute on GitHub<contributing>`
@@ -83,16 +87,25 @@ projects, contributions, suggestions, fixes and constructive feedback.
 
    tutorial/index
    howto/index
-   explanation/index
    reference/index
-   development/index
+   explanation/index
+
+
+.. toctree::
+   :caption: Development
+   :hidden:
+   :maxdepth: 1
+
+   Contributing overview <development/index.rst>
+   Contribute to code <development/contribute_code.rst>
+   Contribute to docs <development/contribute_docs.rst>
+   Community <development/summit.rst>
 
 
 .. LINKS
-.. _Code of Conduct: https://ubuntu.com/community/code-of-conduct
-.. _IRC channel on Libera: https://kiwiirc.com/nextclient/irc.libera.chat/cloud-init
-.. _the cloud-init Discourse forum: https://discourse.ubuntu.com/c/server/cloud-init/
+.. include:: links.txt
+.. _the cloud-init Discourse forum: https://discourse.ubuntu.com/c/project/cloud-init/54
 .. _cloud-init mailing list: https://launchpad.net/~cloud-init
 .. _mailing list archive: https://lists.launchpad.net/cloud-init/
-.. _Release schedule: https://discourse.ubuntu.com/t/cloud-init-release-schedule/32244
+.. _Release schedule: https://discourse.ubuntu.com/t/2025-cloud-init-release-schedule/55534
 .. _Report bugs on GitHub Issues: https://github.com/canonical/cloud-init/issues

@@ -3,6 +3,7 @@
 import base64
 import datetime
 from unittest import mock
+from xml.etree import ElementTree as ET
 
 import pytest
 import requests
@@ -19,18 +20,19 @@ def agent_string():
 
 @pytest.fixture()
 def fake_utcnow():
-    timestamp = datetime.datetime.utcnow()
+    timestamp = datetime.datetime.now(datetime.timezone.utc)
     with mock.patch.object(errors, "datetime", autospec=True) as m:
-        m.utcnow.return_value = timestamp
+        m.now.return_value = timestamp
         yield timestamp
 
 
-@pytest.fixture()
-def fake_vm_id():
-    vm_id = "fake-vm-id"
-    with mock.patch.object(errors.identity, "query_vm_id", autospec=True) as m:
-        m.return_value = vm_id
-        yield vm_id
+@pytest.fixture(autouse=True)
+def fake_vm_id(mocker):
+    vm_id = "foo"
+    mocker.patch(
+        "cloudinit.sources.azure.identity.query_vm_id", return_value=vm_id
+    )
+    yield vm_id
 
 
 def quote_csv_value(value: str) -> str:
@@ -118,10 +120,10 @@ def test_reportable_errors(
         "documentation_url=https://aka.ms/linuxprovisioningerror",
     ]
 
-    assert error.as_encoded_report() == "|".join(data)
+    assert error.as_encoded_report(vm_id=fake_vm_id) == "|".join(data)
 
 
-def test_dhcp_lease():
+def test_dhcp_lease(mocker):
     error = errors.ReportableErrorDhcpLease(duration=5.6, interface="foo")
 
     assert error.reason == "failure to obtain DHCP lease"
@@ -129,7 +131,7 @@ def test_dhcp_lease():
     assert error.supporting_data["interface"] == "foo"
 
 
-def test_dhcp_interface_not_found():
+def test_dhcp_interface_not_found(mocker):
     error = errors.ReportableErrorDhcpInterfaceNotFound(duration=5.6)
 
     assert error.reason == "failure to find DHCP interface"
@@ -160,9 +162,16 @@ def test_dhcp_interface_not_found():
         (
             UrlError(
                 Exception(),
+                code=404,
+            ),
+            "http error 404 querying IMDS",
+        ),
+        (
+            UrlError(
+                Exception(),
                 code=500,
             ),
-            "http error querying IMDS",
+            "http error 500 querying IMDS",
         ),
         (
             UrlError(
@@ -199,6 +208,24 @@ def test_imds_metadata_parsing_exception():
     assert error.supporting_data["exception"] == repr(exception)
 
 
+def test_ovf_parsing_exception():
+    error = None
+    try:
+        ET.fromstring("<badxml")
+    except ET.ParseError as exception:
+        error = errors.ReportableErrorOvfParsingException(exception=exception)
+
+    assert (
+        error.reason == "error parsing ovf-env.xml: "
+        "unclosed token: line 1, column 0"
+    )
+
+
+def test_ovf_invalid_metadata_exception():
+    error = errors.ReportableErrorOvfInvalidMetadata(message="foobar")
+    assert error.reason == "unexpected metadata parsing ovf-env.xml: foobar"
+
+
 def test_unhandled_exception():
     source_error = None
     try:
@@ -212,9 +239,40 @@ def test_unhandled_exception():
     assert isinstance(traceback_base64, str)
 
     trace = base64.b64decode(traceback_base64).decode("utf-8")
-    assert trace.startswith("Traceback")
+    assert trace.startswith("\nValueError: my value error\n")
     assert "raise ValueError" in trace
-    assert trace.endswith("ValueError: my value error\n")
+    assert trace.endswith("Traceback (most recent call last):")
 
     quoted_value = quote_csv_value(f"exception={source_error!r}")
-    assert f"|{quoted_value}|" in error.as_encoded_report()
+    assert f"|{quoted_value}|" in error.as_encoded_report(vm_id="test-vm-id")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Running",
+        "None",
+        None,
+    ],
+)
+def test_imds_invalid_metadata(value):
+    key = "compute"
+    error = errors.ReportableErrorImdsInvalidMetadata(key=key, value=value)
+
+    assert error.reason == "invalid IMDS metadata for key=compute"
+    assert error.supporting_data["key"] == key
+    assert error.supporting_data["value"] == value
+    assert error.supporting_data["type"] == type(value).__name__
+
+
+def test_vm_identification_exception():
+    exception = ValueError("foobar")
+    system_uuid = "1234-5678-90ab-cdef"
+
+    error = errors.ReportableErrorVmIdentification(
+        exception=exception, system_uuid=system_uuid
+    )
+
+    assert error.reason == "failure to identify Azure VM ID"
+    assert error.supporting_data["exception"] == repr(exception)
+    assert error.supporting_data["system_uuid"] == system_uuid

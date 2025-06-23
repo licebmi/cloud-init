@@ -7,18 +7,15 @@
 """Apt Pipelining: configure apt pipelining."""
 
 import logging
-from textwrap import dedent
 
 from cloudinit import util
 from cloudinit.cloud import Cloud
 from cloudinit.config import Config
-from cloudinit.config.schema import MetaSchema, get_meta_doc
+from cloudinit.config.schema import MetaSchema
 from cloudinit.settings import PER_INSTANCE
 
 LOG = logging.getLogger(__name__)
 
-frequency = PER_INSTANCE
-distros = ["ubuntu", "debian"]
 DEFAULT_FILE = "/etc/apt/apt.conf.d/90cloud-init-pipelining"
 APT_PIPE_TPL = (
     "//Written by cloud-init per 'apt_pipelining'\n"
@@ -31,34 +28,10 @@ APT_PIPE_TPL = (
 
 meta: MetaSchema = {
     "id": "cc_apt_pipelining",
-    "name": "Apt Pipelining",
-    "title": "Configure apt pipelining",
-    "description": dedent(
-        """\
-        This module configures apt's ``Acquite::http::Pipeline-Depth`` option,
-        which controls how apt handles HTTP pipelining. It may be useful for
-        pipelining to be disabled, because some web servers, such as S3 do not
-        pipeline properly (LP: #948461).
-
-        Value configuration options for this module are:
-
-        * ``false`` (Default): disable pipelining altogether
-        * ``none``, ``unchanged``, or ``os``: use distro default
-        * ``<number>``: Manually specify pipeline depth. This is not recommended."""  # noqa: E501
-    ),
-    "distros": distros,
-    "frequency": frequency,
-    "examples": [
-        "apt_pipelining: false",
-        "apt_pipelining: none",
-        "apt_pipelining: unchanged",
-        "apt_pipelining: os",
-        "apt_pipelining: 3",
-    ],
+    "distros": ["ubuntu", "debian", "raspberry-pi-os"],
+    "frequency": PER_INSTANCE,
     "activate_by_schema_keys": ["apt_pipelining"],
 }
-
-__doc__ = get_meta_doc(meta)
 
 
 def handle(name: str, cfg: Config, cloud: Cloud, args: list) -> None:
@@ -69,7 +42,7 @@ def handle(name: str, cfg: Config, cloud: Cloud, args: list) -> None:
         write_apt_snippet("0", LOG, DEFAULT_FILE)
     elif apt_pipe_value_s in ("none", "unchanged", "os"):
         return
-    elif apt_pipe_value_s in [str(b) for b in range(0, 6)]:
+    elif apt_pipe_value_s in [str(b) for b in range(6)]:
         write_apt_snippet(apt_pipe_value_s, LOG, DEFAULT_FILE)
     else:
         LOG.warning("Invalid option for apt_pipelining: %s", apt_pipe_value)
@@ -81,6 +54,3 @@ def write_apt_snippet(setting, log, f_name):
     file_contents = APT_PIPE_TPL % (setting)
     util.write_file(f_name, file_contents)
     log.debug("Wrote %s with apt pipeline depth setting %s", f_name, setting)
-
-
-# vi: ts=4 expandtab

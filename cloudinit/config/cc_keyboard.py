@@ -6,13 +6,12 @@
 
 """keyboard: set keyboard layout"""
 
-from textwrap import dedent
+import logging
 
 from cloudinit import distros
-from cloudinit import log as logging
 from cloudinit.cloud import Cloud
 from cloudinit.config import Config
-from cloudinit.config.schema import MetaSchema, get_meta_doc
+from cloudinit.config.schema import MetaSchema
 from cloudinit.settings import PER_INSTANCE
 
 # FIXME: setting keyboard layout should be supported by all OSes.
@@ -27,44 +26,11 @@ supported_distros = distros.Distro.expand_osfamily(
 
 meta: MetaSchema = {
     "id": "cc_keyboard",
-    "name": "Keyboard",
-    "title": "Set keyboard layout",
-    "description": "Handle keyboard configuration.",
     "distros": supported_distros,
-    "examples": [
-        dedent(
-            """\
-            # Set keyboard layout to "us"
-            keyboard:
-              layout: us
-            """
-        ),
-        dedent(
-            """\
-            # Set specific keyboard layout, model, variant, options
-            keyboard:
-              layout: de
-              model: pc105
-              variant: nodeadkeys
-              options: compose:rwin
-            """
-        ),
-        dedent(
-            """\
-            # For Alpine Linux set specific keyboard layout and variant,
-            # as used by setup-keymap. Model and options are ignored.
-            keyboard:
-              layout: gb
-              variant: gb-extd
-            """
-        ),
-    ],
     "frequency": PER_INSTANCE,
     "activate_by_schema_keys": ["keyboard"],
 }
 
-
-__doc__ = get_meta_doc(meta)
 
 LOG = logging.getLogger(__name__)
 
@@ -85,6 +51,3 @@ def handle(name: str, cfg: Config, cloud: Cloud, args: list) -> None:
     options = kb_cfg.get("options", "")
     LOG.debug("Setting keyboard layout to '%s'", layout)
     cloud.distro.set_keymap(layout, model, variant, options)
-
-
-# vi: ts=4 expandtab

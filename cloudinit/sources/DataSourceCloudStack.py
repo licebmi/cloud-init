@@ -12,19 +12,24 @@
 #
 # This file is part of cloud-init. See LICENSE file for license information.
 
+import logging
 import os
 import time
+from contextlib import suppress
 from socket import gaierror, getaddrinfo, inet_ntoa
 from struct import pack
 
-from cloudinit import log as logging
-from cloudinit import sources, subp
+from cloudinit import dmi, net, performance, sources, subp
 from cloudinit import url_helper as uhelp
 from cloudinit import util
 from cloudinit.net import dhcp
+from cloudinit.net.dhcp import NoDHCPLeaseError
+from cloudinit.net.ephemeral import EphemeralIPNetwork
 from cloudinit.sources.helpers import ec2
 
 LOG = logging.getLogger(__name__)
+
+CLOUD_STACK_DMI_NAME = "CloudStack"
 
 
 class CloudStackPasswordServerClient:
@@ -63,6 +68,7 @@ class CloudStackPasswordServerClient:
         )
         return output.strip()
 
+    @performance.timed("Getting password", log_mode="always")
     def get_password(self):
         password = self._do_request("send_my_password")
         if password in ["", "saved_password"]:
@@ -74,7 +80,7 @@ class CloudStackPasswordServerClient:
 
 
 class DataSourceCloudStack(sources.DataSource):
-
+    perform_dhcp_setup = False
     dsname = "CloudStack"
 
     # Setup read_url parameters per get_url_params.
@@ -82,16 +88,82 @@ class DataSourceCloudStack(sources.DataSource):
     url_timeout = 50
 
     def __init__(self, sys_cfg, distro, paths):
-        sources.DataSource.__init__(self, sys_cfg, distro, paths)
+        super().__init__(sys_cfg, distro, paths)
         self.seed_dir = os.path.join(paths.seed_dir, "cs")
         # Cloudstack has its metadata/userdata URLs located at
         # http://<virtual-router-ip>/latest/
         self.api_ver = "latest"
-        self.vr_addr = get_vr_address()
-        if not self.vr_addr:
-            raise RuntimeError("No virtual router found!")
-        self.metadata_address = "http://%s/" % (self.vr_addr,)
         self.cfg = {}
+
+    def _get_domainname(self):
+        """
+        Try obtaining a "domain-name" DHCP lease parameter:
+        - From systemd-networkd lease
+        - From dhclient lease
+        """
+        LOG.debug("Try obtaining domain name from networkd leases")
+        domainname = dhcp.networkd_get_option_from_leases("DOMAINNAME")
+        if domainname:
+            return domainname
+        LOG.debug(
+            "Could not obtain FQDN from networkd leases. "
+            "Falling back to ISC dhclient"
+        )
+
+        # some distros might use isc-dhclient for network setup via their
+        # network manager. If this happens, the lease is more recent than the
+        # ephemeral lease, so use it first.
+        with suppress(dhcp.NoDHCPLeaseMissingDhclientError):
+            domain_name = dhcp.IscDhclient().get_key_from_latest_lease(
+                self.distro, "domain-name"
+            )
+            if domain_name:
+                return domain_name
+
+        LOG.debug(
+            "Could not obtain FQDN from ISC dhclient leases. "
+            "Falling back to %s",
+            self.distro.dhcp_client.client_name,
+        )
+
+        # If no distro leases were found, check the ephemeral lease that
+        # cloud-init set up.
+        with suppress(FileNotFoundError):
+            latest_lease = self.distro.dhcp_client.get_newest_lease(
+                self.distro.fallback_interface
+            )
+            domain_name = latest_lease.get("domain-name") or None
+            return domain_name
+        LOG.debug("No dhcp leases found")
+        return None
+
+    def get_hostname(
+        self,
+        fqdn=False,
+        resolve_ip=False,
+        metadata_only=False,
+    ):
+        """
+        Returns instance's hostname / fqdn
+        First probes the parent class method.
+
+        If fqdn is requested, and the parent method didn't return it,
+        then attach the domain-name from DHCP response.
+        """
+        hostname = super().get_hostname(fqdn, resolve_ip, metadata_only)
+        if fqdn and "." not in hostname.hostname:
+            LOG.debug("FQDN requested")
+            domainname = self._get_domainname()
+            if domainname:
+                fqdn = f"{hostname.hostname}.{domainname}"
+                LOG.debug("Obtained the following FQDN: %s", fqdn)
+                return sources.DataSourceHostname(fqdn, hostname.is_default)
+            LOG.debug(
+                "Could not determine domain name for FQDN. "
+                "Fall back to hostname as an FQDN: %s",
+                fqdn,
+            )
+        return hostname
 
     def wait_for_metadata_service(self):
         url_params = self.get_url_params()
@@ -104,7 +176,7 @@ class DataSourceCloudStack(sources.DataSource):
                 self.metadata_address, "latest/meta-data/instance-id"
             )
         ]
-        start_time = time.time()
+        start_time = time.monotonic()
         url, _response = uhelp.wait_for_url(
             urls=urls,
             max_wait=url_params.max_wait_seconds,
@@ -119,13 +191,18 @@ class DataSourceCloudStack(sources.DataSource):
                 "Giving up on waiting for the metadata from %s"
                 " after %s seconds",
                 urls,
-                int(time.time() - start_time),
+                int(time.monotonic() - start_time),
             )
 
         return bool(url)
 
     def get_config_obj(self):
         return self.cfg
+
+    @staticmethod
+    def ds_detect() -> bool:
+        """Check if running on this datasource"""
+        return is_platform_viable()
 
     def _get_data(self):
         seed_ret = {}
@@ -134,46 +211,63 @@ class DataSourceCloudStack(sources.DataSource):
             self.metadata = seed_ret["meta-data"]
             LOG.debug("Using seeded cloudstack data from: %s", self.seed_dir)
             return True
+        if self.perform_dhcp_setup:
+            primary_nic = net.find_fallback_nic()
+            LOG.debug("Attempting DHCP on: %s", primary_nic)
+            network_context = EphemeralIPNetwork(self.distro, primary_nic)
+        else:
+            network_context = util.nullcontext()
         try:
-            if not self.wait_for_metadata_service():
-                return False
-            start_time = time.time()
-            self.userdata_raw = ec2.get_instance_userdata(
-                self.api_ver, self.metadata_address
-            )
-            self.metadata = ec2.get_instance_metadata(
-                self.api_ver, self.metadata_address
-            )
-            LOG.debug(
-                "Crawl of metadata service took %s seconds",
-                int(time.time() - start_time),
-            )
-            password_client = CloudStackPasswordServerClient(self.vr_addr)
-            try:
-                set_password = password_client.get_password()
-            except Exception:
-                util.logexc(
-                    LOG,
-                    "Failed to fetch password from virtual router %s",
-                    self.vr_addr,
+            with network_context:
+                vr_addr = get_vr_address(self.distro)
+                # If vr_addr is a dict, we have the DHCP lease
+                self.vr_addr = (
+                    vr_addr.get("dhcp-server-identifier")
+                    if isinstance(vr_addr, dict)
+                    else vr_addr
                 )
-            else:
-                if set_password:
-                    self.cfg = {
-                        "ssh_pwauth": True,
-                        "password": set_password,
-                        "chpasswd": {
-                            "expire": False,
-                        },
-                    }
-            return True
+                if not self.vr_addr:
+                    raise RuntimeError("No virtual router found!")
+                self.metadata_address = f"http://{self.vr_addr}/"
+                if not self.wait_for_metadata_service():
+                    return False
+
+                return self._crawl_metadata()
+        except NoDHCPLeaseError:
+            LOG.warning("Unable to obtain a DHCP lease on %s", primary_nic)
+            return False
+        except Exception as e:
+            LOG.warning("Failed fetching metadata service: %s", str(e))
+            return False
+
+    @performance.timed("Crawling metadata", log_mode="always")
+    def _crawl_metadata(self):
+        self.userdata_raw = ec2.get_instance_userdata(
+            self.api_ver, self.metadata_address
+        )
+        self.metadata = ec2.get_instance_metadata(
+            self.api_ver, self.metadata_address
+        )
+
+        password_client = CloudStackPasswordServerClient(self.vr_addr)
+        try:
+            set_password = password_client.get_password()
         except Exception:
             util.logexc(
                 LOG,
-                "Failed fetching from metadata service %s",
-                self.metadata_address,
+                "Failed to fetch password from virtual router %s",
+                self.vr_addr,
             )
-            return False
+        else:
+            if set_password:
+                self.cfg = {
+                    "ssh_pwauth": True,
+                    "password": set_password,
+                    "chpasswd": {
+                        "expire": False,
+                    },
+                }
+        return True
 
     def get_instance_id(self):
         return self.metadata["instance-id"]
@@ -181,6 +275,18 @@ class DataSourceCloudStack(sources.DataSource):
     @property
     def availability_zone(self):
         return self.metadata["availability-zone"]
+
+
+class DataSourceCloudStackLocal(DataSourceCloudStack):
+    """Run in init-local using a dhcp discovery prior to metadata crawl.
+
+    In init-local, no network is available. This subclass sets up minimal
+    networking with dhclient on a viable nic so that it can talk to the
+    metadata service. If the metadata service provides network configuration
+    then render the network configuration for that instance based on metadata.
+    """
+
+    perform_dhcp_setup = True  # Get metadata network config if present
 
 
 def get_data_server():
@@ -196,7 +302,7 @@ def get_data_server():
 
 def get_default_gateway():
     # Returns the default gateway ip address in the dotted format.
-    lines = util.load_file("/proc/net/route").splitlines()
+    lines = util.load_text_file("/proc/net/route").splitlines()
     for line in lines:
         items = line.split("\t")
         if items[1] == "00000000":
@@ -207,7 +313,7 @@ def get_default_gateway():
     return None
 
 
-def get_vr_address():
+def get_vr_address(distro):
     # Get the address of the virtual router via dhcp leases
     # If no virtual router is detected, fallback on default gateway.
     # See http://docs.cloudstack.apache.org/projects/cloudstack-administration/en/4.8/virtual_machines/user-data.html # noqa
@@ -229,22 +335,43 @@ def get_vr_address():
         )
         return latest_address
 
-    # Try dhcp lease files next...
-    lease_file = dhcp.IscDhclient.get_latest_lease()
-    if not lease_file:
-        LOG.debug("No lease file found, using default gateway")
-        return get_default_gateway()
+    # Try dhcp lease files next
+    # get_key_from_latest_lease() needs a Distro object to know which directory
+    # stores lease files
+    with suppress(dhcp.NoDHCPLeaseMissingDhclientError):
+        latest_address = dhcp.IscDhclient().get_key_from_latest_lease(
+            distro, "dhcp-server-identifier"
+        )
+        if latest_address:
+            LOG.debug("Found SERVER_ADDRESS '%s' via dhclient", latest_address)
+            return latest_address
 
-    lease_file = dhcp.IscDhclient.parse_dhcp_server_from_lease_file(lease_file)
-    if not latest_address:
-        # No virtual router found, fallback on default gateway
-        LOG.debug("No DHCP found, using default gateway")
-        return get_default_gateway()
-    return latest_address
+    with suppress(FileNotFoundError):
+        latest_lease = distro.dhcp_client.get_newest_lease(distro)
+        if latest_lease:
+            LOG.debug(
+                "Found SERVER_ADDRESS '%s' via ephemeral %s lease ",
+                latest_lease,
+                distro.dhcp_client.client_name,
+            )
+            return latest_lease
+
+    # No virtual router found, fallback to default gateway
+    LOG.debug("No DHCP found, using default gateway")
+    return get_default_gateway()
+
+
+def is_platform_viable() -> bool:
+    product_name = dmi.read_dmi_data("system-product-name")
+    if not product_name:
+        LOG.debug("system-product-name not available in dmi data")
+        return False
+    return product_name.startswith(CLOUD_STACK_DMI_NAME)
 
 
 # Used to match classes to dependencies
 datasources = [
+    (DataSourceCloudStackLocal, (sources.DEP_FILESYSTEM,)),
     (DataSourceCloudStack, (sources.DEP_FILESYSTEM, sources.DEP_NETWORK)),
 ]
 

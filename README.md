@@ -1,8 +1,8 @@
 # cloud-init
 
-![Unit Tests](https://github.com/canonical/cloud-init/actions/workflows/unit.yml/badge.svg)
-![Integration Tests](https://github.com/canonical/cloud-init/actions/workflows/integration.yml/badge.svg)
-![Documentation](https://github.com/canonical/cloud-init/actions/workflows/check_format.yml/badge.svg)
+![Unit Tests](https://github.com/canonical/cloud-init/actions/workflows/unit.yml/badge.svg?branch=main)
+![Integration Tests](https://github.com/canonical/cloud-init/actions/workflows/integration.yml/badge.svg?branch=main)
+![Documentation](https://github.com/canonical/cloud-init/actions/workflows/check_format.yml/badge.svg?branch=main)
 
 Cloud-init is the *industry standard* multi-distribution method for
 cross-platform cloud instance initialization. It is supported across all
@@ -24,7 +24,7 @@ instance.
 
 ## Getting help
 
-If you need support, start with the [user documentation](https://cloudinit.readthedocs.io/en/latest/).
+If you need support, start with the [user documentation](https://docs.cloud-init.io/en/latest/).
 
 If you need additional help consider reaching out with one of the following options:
 
@@ -36,14 +36,14 @@ If you need additional help consider reaching out with one of the following opti
 
 ## Distribution and cloud support
 
-The majority of [clouds](https://cloudinit.readthedocs.io/en/latest/reference/datasources.html#datasources_supported)
-and [Linux / Unix OSes](https://cloudinit.readthedocs.io/en/latest/reference/distros.html)
+The majority of [clouds](https://docs.cloud-init.io/en/latest/reference/datasources.html#datasources_supported)
+and [Linux / Unix OSes](https://docs.cloud-init.io/en/latest/reference/distros.html)
 are supported by and ship with cloud-init. If your distribution or cloud is not
 supported, please get in contact with that distribution and send them our way!
 
 ## To start developing cloud-init
 
-Checkout the [contributing](https://cloudinit.readthedocs.io/en/latest/development/contributing.html)
+Checkout the [contributing](https://docs.cloud-init.io/en/latest/development/index.html)
 document that outlines the steps necessary to develop, test, and submit code.
 
 ## Daily builds

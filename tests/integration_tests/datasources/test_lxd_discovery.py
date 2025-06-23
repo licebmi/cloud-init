@@ -6,7 +6,11 @@ import yaml
 from tests.integration_tests.instances import IntegrationInstance
 from tests.integration_tests.integration_settings import PLATFORM
 from tests.integration_tests.releases import CURRENT_RELEASE, IS_UBUNTU
-from tests.integration_tests.util import lxd_has_nocloud, verify_clean_log
+from tests.integration_tests.util import (
+    lxd_has_nocloud,
+    verify_clean_boot,
+    verify_clean_log,
+)
 
 
 def _customize_environment(client: IntegrationInstance):
@@ -75,6 +79,7 @@ def test_lxd_datasource_discovery(client: IntegrationInstance):
     } == netplan_cfg
     log = client.read_from_file("/var/log/cloud-init.log")
     verify_clean_log(log)
+    verify_clean_boot(client)
     result = client.execute("cloud-id")
     if result.stdout != "lxd":
         raise AssertionError(
@@ -114,7 +119,7 @@ def test_lxd_datasource_discovery(client: IntegrationInstance):
     assert {"public-keys": v1["public_ssh_keys"][0]} == (
         yaml.safe_load(ds_cfg["config"]["user.meta-data"])
     )
-    assert "#cloud-config\ninstance-id" in ds_cfg["meta-data"]
+    assert "instance-id" in ds_cfg["meta-data"]
 
     # Some series no longer provide nocloud-net seed files (LP: #1958460)
     if lxd_has_nocloud(client):

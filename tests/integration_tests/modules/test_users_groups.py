@@ -4,13 +4,19 @@ TODO:
 * This module assumes that the "ubuntu" user will be created when "default" is
   specified; this will need modification to run on other OSes.
 """
+
 import re
 
 import pytest
 
 from tests.integration_tests.instances import IntegrationInstance
-from tests.integration_tests.releases import CURRENT_RELEASE, IS_UBUNTU, JAMMY
-from tests.integration_tests.util import verify_clean_log
+from tests.integration_tests.releases import (
+    CURRENT_RELEASE,
+    IS_UBUNTU,
+    JAMMY,
+    NOBLE,
+)
+from tests.integration_tests.util import verify_clean_boot
 
 USER_DATA = """\
 #cloud-config
@@ -32,9 +38,12 @@ users:
 AHWYPYb2FT.lbioDm2RrkJPb9BZMN1O/
   - name: barfoo
     gecos: Bar B. Foo
-    sudo: ALL=(ALL) NOPASSWD:ALL
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
     groups: [cloud-users, secret]
     lock_passwd: true
+  - name: nopassworduser
+    gecos: I do not like passwords
+    lock_passwd: false
   - name: cloudy
     gecos: Magic Cloud App Daemon User
     inactive: '0'
@@ -45,6 +54,10 @@ AHWYPYb2FT.lbioDm2RrkJPb9BZMN1O/
   - name: archivist
     uid: 1743
 """
+
+NEW_USER_EMPTY_PASSWD_WARNING = "Not unlocking password for user {username}. 'lock_passwd: false' present in user-data but no 'passwd'/'plain_text_passwd'/'hashed_passwd' provided in user-data"  # noqa: E501
+
+EXISTING_USER_EMPTY_PASSWD_WARNING = "Not unlocking blank password for existing user {username}. 'lock_passwd: false' present in user-data but no existing password set and no 'plain_text_passwd'/'hashed_passwd' provided in user-data"  # noqa E501
 
 
 @pytest.mark.ci
@@ -85,6 +98,11 @@ class TestUsersGroups:
             (["passwd", "eric"], r"eric:x:1742:"),
             # Test int uid
             (["passwd", "archivist"], r"archivist:x:1743:"),
+            # Test int uid
+            (
+                ["passwd", "nopassworduser"],
+                r"nopassworduser:x:[0-9]{4}:[0-9]{4}:I do not like passwords",
+            ),
         ],
     )
     def test_users_groups(self, regex, getent_args, class_client):
@@ -97,14 +115,48 @@ class TestUsersGroups:
             )
         )
 
+    def test_initial_warnings(self, class_client):
+        """Check for initial warnings."""
+        warnings = (
+            [NEW_USER_EMPTY_PASSWD_WARNING.format(username="nopassworduser")]
+            if CURRENT_RELEASE > NOBLE
+            else []
+        )
+        verify_clean_boot(
+            class_client,
+            require_warnings=warnings,
+        )
+
     def test_user_root_in_secret(self, class_client):
         """Test root user is in 'secret' group."""
-        log = class_client.read_from_file("/var/log/cloud-init.log")
-        verify_clean_log(log)
         output = class_client.execute("groups root").stdout
         _, groups_str = output.split(":", maxsplit=1)
         groups = groups_str.split()
         assert "secret" in groups
+
+    def test_nopassword_unlock_warnings(self, class_client):
+        """Verify warnings for empty passwords for new and existing users."""
+        # Fake admin clearing and unlocking and empty unlocked password foobar
+        # This will generate additional warnings about not unlocking passwords
+        # for pre-existing users which have an existing empty password
+        class_client.execute("passwd -d foobar")
+        class_client.instance.clean()
+        class_client.restart()
+        warnings = (
+            [
+                EXISTING_USER_EMPTY_PASSWD_WARNING.format(
+                    username="nopassworduser"
+                ),
+                EXISTING_USER_EMPTY_PASSWD_WARNING.format(username="foobar"),
+            ]
+            if CURRENT_RELEASE > NOBLE
+            else []
+        )
+        verify_clean_boot(
+            class_client,
+            ignore_warnings=True,  # ignore warnings about existing groups
+            require_warnings=warnings,
+        )
 
 
 @pytest.mark.user_data(USER_DATA)

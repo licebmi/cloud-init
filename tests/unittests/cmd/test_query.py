@@ -15,6 +15,7 @@ from cloudinit.atomic_helper import b64e
 from cloudinit.cmd import query
 from cloudinit.helpers import Paths
 from cloudinit.sources import REDACT_SENSITIVE_VALUE
+from cloudinit.templater import JinjaSyntaxParsingException
 from cloudinit.util import write_file
 from tests.unittests.helpers import mock
 
@@ -33,7 +34,6 @@ def setup_mocks(mocker):
     mocker.patch("cloudinit.cmd.query.read_cfg_paths", return_value=Paths({}))
 
 
-@mock.patch(M_PATH + "addLogHandlerCLI", lambda *args: "")
 class TestQuery:
     Args = namedtuple(
         "Args",
@@ -84,10 +84,7 @@ class TestQuery:
             vendor_data=None,
             varname=None,
         )
-        with mock.patch(
-            M_PATH + "addLogHandlerCLI", return_value=""
-        ) as m_cli_log:
-            assert 1 == query.handle_args("anyname", args)
+        assert 1 == query.handle_args("anyname", args)
         expected_error = (
             "Expected one of the options: --all, --format, --list-keys"
             " or varname\n"
@@ -95,7 +92,6 @@ class TestQuery:
         assert expected_error in caplog.text
         out, _err = capsys.readouterr()
         assert "usage: query" in out
-        assert 1 == m_cli_log.call_count
 
     @pytest.mark.parametrize(
         "inst_data,varname,expected_error",
@@ -131,10 +127,9 @@ class TestQuery:
         paths, _, _, _ = self._setup_paths(tmpdir)
         with mock.patch(M_PATH + "read_cfg_paths") as m_paths:
             m_paths.return_value = paths
-            with mock.patch(M_PATH + "addLogHandlerCLI", return_value=""):
-                with mock.patch(M_PATH + "load_userdata") as m_lud:
-                    m_lud.return_value = "ud"
-                    assert 1 == query.handle_args("anyname", args)
+            with mock.patch(M_PATH + "load_userdata") as m_lud:
+                m_lud.return_value = "ud"
+                assert 1 == query.handle_args("anyname", args)
         assert expected_error in caplog.text
 
     def test_handle_args_error_on_missing_instance_data(self, caplog, tmpdir):
@@ -171,7 +166,7 @@ class TestQuery:
             vendor_data="vd",
             varname=None,
         )
-        with mock.patch(M_PATH + "util.load_file") as m_load:
+        with mock.patch(M_PATH + "util.load_binary_file") as m_load:
             m_load.side_effect = OSError(errno.EACCES, "Not allowed")
             assert 1 == query.handle_args("anyname", args)
         msg = "No read permission on '%s'. Try sudo" % noread_fn
@@ -574,5 +569,66 @@ class TestQuery:
             assert 1 == query.handle_args("anyname", args)
         assert expected_error in caplog.text
 
+    @pytest.mark.parametrize(
+        "header_included",
+        [True, False],
+    )
+    def test_handle_args_formats_jinja_successfully(
+        self, caplog, tmpdir, capsys, header_included
+    ):
+        """Test that rendering a jinja template works as expected."""
+        instance_data = tmpdir.join("instance-data")
+        instance_data.write(
+            '{"v1": {"v1_1": "val1.1", "v1_2": "val1.2"}, "v2": '
+            '{"v2_2": "val2.2"}, "top": "gun"}'
+        )
+        header = "## template: jinja\n" if header_included else ""
+        format = header + "v1_1: {{ v1.v1_1 }}"
+        expected = header + "v1_1: val1.1\n"
 
-# vi: ts=4 expandtab
+        args = self.Args(
+            debug=False,
+            dump_all=False,
+            format=format,
+            instance_data=instance_data.strpath,
+            list_keys=False,
+            user_data="ud",
+            vendor_data="vd",
+            varname=None,
+        )
+        with mock.patch("os.getuid") as m_getuid:
+            m_getuid.return_value = 100
+            assert 0 == query.handle_args("anyname", args)
+        out, _err = capsys.readouterr()
+        assert expected == out
+
+    def test_handle_args_invalid_jinja_exception(self, caplog, tmpdir, capsys):
+        """Raise an error when a jinja syntax error is encountered."""
+        instance_data = tmpdir.join("instance-data")
+        instance_data.write(
+            '{"v1": {"v1_1": "val1.1", "v1_2": "val1.2"}, "v2": '
+            '{"v2_2": "val2.2"}, "top": "gun"}'
+        )
+        format = "v1_1: {{ v1.v1_1 } }"
+        expected_error = (
+            "Failed to render templated data. "
+            + JinjaSyntaxParsingException.format_error_message(
+                syntax_error="unexpected '}'",
+                line_number="2",
+                line_content="v1_1: {{ v1.v1_1 } }",
+            )
+        )
+        args = self.Args(
+            debug=False,
+            dump_all=False,
+            format=format,
+            instance_data=instance_data.strpath,
+            list_keys=False,
+            user_data="ud",
+            vendor_data="vd",
+            varname=None,
+        )
+        with mock.patch("os.getuid") as m_getuid:
+            m_getuid.return_value = 100
+            assert 1 == query.handle_args("anyname", args)
+        assert expected_error in caplog.text

@@ -5,13 +5,13 @@
 # Vultr Metadata API:
 # https://www.vultr.com/metadata/
 
+import logging
 from typing import Tuple
 
 import cloudinit.sources.helpers.vultr as vultr
-from cloudinit import log as log
 from cloudinit import sources, stages, util, version
 
-LOG = log.getLogger(__name__)
+LOG = logging.getLogger(__name__)
 BUILTIN_DS_CONFIG = {
     "url": "http://169.254.169.254",
     "retries": 30,
@@ -30,9 +30,9 @@ class DataSourceVultr(sources.DataSource):
 
     dsname = "Vultr"
 
-    sensitive_metadata_keys: Tuple[
-        str, ...
-    ] = sources.DataSource.sensitive_metadata_keys + ("startup-script",)
+    sensitive_metadata_keys: Tuple[str, ...] = (
+        sources.DataSource.sensitive_metadata_keys + ("startup-script",)
+    )
 
     def __init__(self, sys_cfg, distro, paths):
         super(DataSourceVultr, self).__init__(sys_cfg, distro, paths)
@@ -42,6 +42,7 @@ class DataSourceVultr(sources.DataSource):
                 BUILTIN_DS_CONFIG,
             ]
         )
+        self.netcfg = None
 
     @staticmethod
     def ds_detect():

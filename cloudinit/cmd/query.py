@@ -16,21 +16,23 @@ output; if this fails, they are treated as binary.
 """
 
 import argparse
+import logging
 import os
 import sys
 from errno import EACCES
 
-from cloudinit import atomic_helper, log, util
-from cloudinit.cmd.devel import addLogHandlerCLI, read_cfg_paths
+from cloudinit import atomic_helper, util
+from cloudinit.cmd.devel import read_cfg_paths
 from cloudinit.handlers.jinja_template import (
     convert_jinja_instance_data,
     get_jinja_variable_alias,
     render_jinja_payload,
 )
 from cloudinit.sources import REDACT_SENSITIVE_VALUE
+from cloudinit.templater import JinjaSyntaxParsingException
 
 NAME = "query"
-LOG = log.getLogger(NAME)
+LOG = logging.getLogger(__name__)
 
 
 def get_parser(parser=None):
@@ -129,7 +131,7 @@ def load_userdata(ud_file_path):
 
     @returns: String of uncompressed userdata if possible, otherwise bytes.
     """
-    bdata = util.load_file(ud_file_path, decode=False)
+    bdata = util.load_binary_file(ud_file_path, quiet=True)
     try:
         return bdata.decode("utf-8")
     except UnicodeDecodeError:
@@ -178,7 +180,7 @@ def _read_instance_data(instance_data, user_data, vendor_data) -> dict:
     combined_cloud_config_fn = paths.get_runpath("combined_cloud_config")
 
     try:
-        instance_json = util.load_file(instance_data_fn)
+        instance_json = util.load_text_file(instance_data_fn)
     except (IOError, OSError) as e:
         if e.errno == EACCES:
             LOG.error("No read permission on '%s'. Try sudo", instance_data_fn)
@@ -189,7 +191,7 @@ def _read_instance_data(instance_data, user_data, vendor_data) -> dict:
     instance_data = util.load_json(instance_json)
     try:
         combined_cloud_config = util.load_json(
-            util.load_file(combined_cloud_config_fn)
+            util.load_text_file(combined_cloud_config_fn)
         )
     except (IOError, OSError):
         # File will not yet be present in init-local stage.
@@ -261,7 +263,6 @@ def _find_instance_data_leaf_by_varname_path(
 
 def handle_args(name, args):
     """Handle calls to 'cloud-init query' as a subcommand."""
-    addLogHandlerCLI(LOG, log.DEBUG if args.debug else log.WARNING)
     if not any([args.list_keys, args.varname, args.format, args.dump_all]):
         LOG.error(
             "Expected one of the options: --all, --format,"
@@ -277,12 +278,19 @@ def handle_args(name, args):
         return 1
     if args.format:
         payload = "## template: jinja\n{fmt}".format(fmt=args.format)
-        rendered_payload = render_jinja_payload(
-            payload=payload,
-            payload_fn="query commandline",
-            instance_data=instance_data,
-            debug=True if args.debug else False,
-        )
+        try:
+            rendered_payload = render_jinja_payload(
+                payload=payload,
+                payload_fn="query command line",
+                instance_data=instance_data,
+                debug=True if args.debug else False,
+            )
+        except JinjaSyntaxParsingException as e:
+            LOG.error(
+                "Failed to render templated data. %s",
+                str(e),
+            )
+            return 1
         if rendered_payload:
             print(rendered_payload)
             return 0

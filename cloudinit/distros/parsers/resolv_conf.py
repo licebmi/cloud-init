@@ -4,9 +4,9 @@
 #
 # This file is part of cloud-init. See LICENSE file for license information.
 
+import logging
 from io import StringIO
 
-from cloudinit import log as logging
 from cloudinit import util
 from cloudinit.distros.parsers import chop_comment
 
@@ -57,7 +57,7 @@ class ResolvConf:
     def __str__(self):
         self.parse()
         contents = StringIO()
-        for (line_type, components) in self._contents:
+        for line_type, components in self._contents:
             if line_type == "blank":
                 contents.write("\n")
             elif line_type == "all_comment":
@@ -72,7 +72,7 @@ class ResolvConf:
 
     def _retr_option(self, opt_name):
         found = []
-        for (line_type, components) in self._contents:
+        for line_type, components in self._contents:
             if line_type == "option":
                 (cfg_opt, cfg_value, _comment_tail) = components
                 if cfg_opt == opt_name:
@@ -134,7 +134,7 @@ class ResolvConf:
 
     def _parse(self, contents):
         entries = []
-        for (i, line) in enumerate(contents.splitlines()):
+        for i, line in enumerate(contents.splitlines()):
             sline = line.strip()
             if not sline:
                 entries.append(("blank", [line]))
@@ -161,6 +161,3 @@ class ResolvConf:
                 raise IOError("Unexpected resolv.conf option %s" % (cfg_opt))
             entries.append(("option", [cfg_opt, cfg_values, tail]))
         return entries
-
-
-# vi: ts=4 expandtab

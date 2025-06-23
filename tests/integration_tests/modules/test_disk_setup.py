@@ -8,8 +8,13 @@ from pycloudlib.lxd.instance import LXDInstance
 from cloudinit.subp import subp
 from tests.integration_tests.instances import IntegrationInstance
 from tests.integration_tests.integration_settings import PLATFORM
-from tests.integration_tests.releases import CURRENT_RELEASE, FOCAL, IS_UBUNTU
-from tests.integration_tests.util import verify_clean_log
+from tests.integration_tests.releases import (
+    CURRENT_RELEASE,
+    FOCAL,
+    IS_UBUNTU,
+    NOBLE,
+)
+from tests.integration_tests.util import verify_clean_boot, verify_clean_log
 
 DISK_PATH = "/tmp/test_disk_setup_{}".format(uuid4())
 
@@ -24,8 +29,7 @@ def setup_and_mount_lxd_disk(instance: LXDInstance):
 
 @pytest.fixture
 def create_disk():
-    # 640k should be enough for anybody
-    subp("dd if=/dev/zero of={} bs=1k count=640".format(DISK_PATH).split())
+    subp("dd if=/dev/zero of={} bs=64k count=40".format(DISK_PATH).split())
     yield
     os.remove(DISK_PATH)
 
@@ -69,6 +73,7 @@ class TestDeviceAliases:
         assert "changed my_alias.1 => /dev/sdb1" in log
         assert "changed my_alias.2 => /dev/sdb2" in log
         verify_clean_log(log)
+        verify_clean_boot(client)
 
         lsblk = json.loads(client.execute("lsblk --json"))
         sdb = [x for x in lsblk["blockdevices"] if x["name"] == "sdb"][0]
@@ -143,6 +148,7 @@ class TestPartProbeAvailability:
 
     def _verify_first_disk_setup(self, client, log):
         verify_clean_log(log)
+        verify_clean_boot(client)
         lsblk = json.loads(client.execute("lsblk --json"))
         sdb = [x for x in lsblk["blockdevices"] if x["name"] == "sdb"][0]
         assert len(sdb["children"]) == 2
@@ -191,7 +197,7 @@ class TestPartProbeAvailability:
             UPDATED_PARTPROBE_USERDATA,
         )
         client.execute(
-            "sed -i 's/write_files/write_files\\n - mounts/' "
+            "sed -i 's/write_files$/write_files\\n  - mounts/' "
             "/etc/cloud/cloud.cfg"
         )
 
@@ -200,6 +206,7 @@ class TestPartProbeAvailability:
 
         # Assert new setup works as expected
         verify_clean_log(log)
+        verify_clean_boot(client)
 
         lsblk = json.loads(client.execute("lsblk --json"))
         sdb = [x for x in lsblk["blockdevices"] if x["name"] == "sdb"][0]
@@ -224,3 +231,42 @@ class TestPartProbeAvailability:
         self._verify_first_disk_setup(client, log)
 
         assert "partprobe" not in log
+
+
+def setup_lxd_disk_with_fs(instance: LXDInstance):
+    subp(["mkfs.ext4", DISK_PATH])
+    subp(
+        f"lxc config device add {instance.name} test-disk-setup-disk "
+        f"disk source={DISK_PATH}".split()
+    )
+
+
+@pytest.mark.lxd_setup.with_args(setup_lxd_disk_with_fs)
+@pytest.mark.skipif(not IS_UBUNTU, reason="Only ever tested on Ubuntu")
+@pytest.mark.skipif(
+    PLATFORM != "lxd_vm", reason="Test requires additional mounted device"
+)
+def test_required_mounts(create_disk, client: IntegrationInstance):
+    """Ensure /var is mounted before used.
+
+    GH-6001
+    LP: #2097441
+    """
+    client.execute(
+        'echo "/dev/sdb /var auto defaults,nofail 0 2" >> /etc/fstab'
+    )
+    client.execute("cloud-init clean --logs")
+    client.restart()
+
+    service = (
+        "cloud-init-local.service"
+        if CURRENT_RELEASE <= NOBLE
+        else "cloud-init-main.service"
+    )
+
+    deps = client.execute(
+        f"systemctl list-dependencies --all {service}".split()
+    )
+    assert "var.mount" in deps, "Exepected 'var.mount' to be a dependency"
+
+    verify_clean_boot(client)

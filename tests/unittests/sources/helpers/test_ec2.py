@@ -276,7 +276,7 @@ class TestEc2Util(helpers.ResponsesTestCase):
     def test_metadata_children_with_invalid_character(self):
         def _skip_tags(exception):
             if isinstance(exception, uh.UrlError) and exception.code == 404:
-                if "meta-data/tags/" in exception.url:
+                if exception.url and "meta-data/tags/" in exception.url:
                     print(exception.url)
                     return True
             return False
@@ -322,6 +322,3 @@ class TestEc2Util(helpers.ResponsesTestCase):
         self.assertEqual(md["ami-launch-index"], "1")
         md = ec2.get_instance_metadata(self.VERSION, retries=0, timeout=0.1)
         self.assertEqual(len(md), 0)
-
-
-# vi: ts=4 expandtab

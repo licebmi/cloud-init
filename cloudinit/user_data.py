@@ -8,15 +8,14 @@
 #
 # This file is part of cloud-init. See LICENSE file for license information.
 
+import logging
 import os
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.nonmultipart import MIMENonMultipart
 from email.mime.text import MIMEText
 
-from cloudinit import features, handlers
-from cloudinit import log as logging
-from cloudinit import util
+from cloudinit import features, handlers, util
 from cloudinit.url_helper import UrlError, read_file_or_url
 
 LOG = logging.getLogger(__name__)
@@ -52,8 +51,8 @@ DECOMP_TYPES = [
 # Msg header used to track attachments
 ATTACHMENT_FIELD = "Number-Attachments"
 
-# Only the following content types can have there launch index examined
-# in there payload, evey other content type can still provide a header
+# Only the following content types can have their launch index examined
+# in their payload, every other content type can still provide a header
 EXAMINE_FOR_LAUNCH_INDEX = ["text/cloud-config"]
 
 
@@ -232,7 +231,7 @@ class UserDataProcessor:
             if include_once_on:
                 include_once_fn = self._get_include_once_filename(include_url)
             if include_once_on and os.path.isfile(include_once_fn):
-                content = util.load_file(include_once_fn)
+                content = util.load_text_file(include_once_fn)
             else:
                 try:
                     resp = read_file_or_url(
@@ -386,6 +385,3 @@ def convert_string(raw_data, content_type=NOT_MULTIPART_TYPE):
         msg = create_binmsg(bdata, content_type)
 
     return msg
-
-
-# vi: ts=4 expandtab

@@ -3,9 +3,9 @@
 #
 # This file is part of cloud-init. See LICENSE file for license information.
 
-from cloudinit import atomic_helper, dmi, helpers
-from cloudinit import log as logging
-from cloudinit import sources, url_helper, util
+import logging
+
+from cloudinit import atomic_helper, dmi, helpers, sources, url_helper, util
 from cloudinit.sources.helpers import ec2
 
 LOG = logging.getLogger(__name__)
@@ -76,13 +76,10 @@ class DataSourceExoscale(sources.DataSource):
 
         @returns: Dictionary of crawled metadata content.
         """
-        metadata_ready = util.log_time(
-            logfunc=LOG.info,
-            msg="waiting for the metadata service",
-            func=self.wait_for_metadata_service,
-        )
+        metadata_ready = self.wait_for_metadata_service()
 
         if not metadata_ready:
+            LOG.error("Unable to get response from metadata service")
             return {}
 
         return read_metadata(
@@ -100,11 +97,7 @@ class DataSourceExoscale(sources.DataSource):
         Please refer to the datasource documentation for details on how the
         metadata server and password server are crawled.
         """
-        data = util.log_time(
-            logfunc=LOG.debug,
-            msg="Crawl of metadata service",
-            func=self.crawl_metadata,
-        )
+        data = self.crawl_metadata()
 
         if not data:
             return False
@@ -287,5 +280,3 @@ if __name__ == "__main__":
     )
 
     print(atomic_helper.json_dumps(data))
-
-# vi: ts=4 expandtab

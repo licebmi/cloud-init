@@ -9,6 +9,7 @@ from cloudinit.sources import DataSourceAliYun as AliYun
 from cloudinit.sources import DataSourceAltCloud as AltCloud
 from cloudinit.sources import DataSourceAzure as Azure
 from cloudinit.sources import DataSourceBigstep as Bigstep
+from cloudinit.sources import DataSourceCloudCIX as CloudCIX
 from cloudinit.sources import DataSourceCloudSigma as CloudSigma
 from cloudinit.sources import DataSourceCloudStack as CloudStack
 from cloudinit.sources import DataSourceConfigDrive as ConfigDrive
@@ -33,9 +34,11 @@ from cloudinit.sources import DataSourceSmartOS as SmartOS
 from cloudinit.sources import DataSourceUpCloud as UpCloud
 from cloudinit.sources import DataSourceVMware as VMware
 from cloudinit.sources import DataSourceVultr as Vultr
+from cloudinit.sources import DataSourceWSL as WSL
 from tests.unittests import helpers as test_helpers
 
 DEFAULT_LOCAL = [
+    AliYun.DataSourceAliYunLocal,
     Azure.DataSourceAzure,
     CloudSigma.DataSourceCloudSigma,
     ConfigDrive.DataSourceConfigDrive,
@@ -44,6 +47,7 @@ DEFAULT_LOCAL = [
     Hetzner.DataSourceHetzner,
     IBMCloud.DataSourceIBMCloud,
     LXD.DataSourceLXD,
+    MAAS.DataSourceMAASLocal,
     NoCloud.DataSourceNoCloud,
     OpenNebula.DataSourceOpenNebula,
     Oracle.DataSourceOracle,
@@ -58,6 +62,8 @@ DEFAULT_LOCAL = [
     VMware.DataSourceVMware,
     NWCS.DataSourceNWCS,
     Akamai.DataSourceAkamaiLocal,
+    WSL.DataSourceWSL,
+    CloudStack.DataSourceCloudStackLocal,
 ]
 
 DEFAULT_NETWORK = [
@@ -72,10 +78,12 @@ DEFAULT_NETWORK = [
     MAAS.DataSourceMAAS,
     NoCloud.DataSourceNoCloudNet,
     OpenStack.DataSourceOpenStack,
+    Oracle.DataSourceOracleNet,
     OVF.DataSourceOVFNet,
     UpCloud.DataSourceUpCloud,
     Akamai.DataSourceAkamai,
     VMware.DataSourceVMware,
+    CloudCIX.DataSourceCloudCIX,
 ]
 
 

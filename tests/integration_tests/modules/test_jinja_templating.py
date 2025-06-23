@@ -2,7 +2,9 @@
 import pytest
 
 from tests.integration_tests.instances import IntegrationInstance
+from tests.integration_tests.integration_settings import PLATFORM
 from tests.integration_tests.util import (
+    verify_clean_boot,
     verify_clean_log,
     verify_ordered_items_in_text,
 )
@@ -22,6 +24,9 @@ runcmd:
 """
 
 
+@pytest.mark.skipif(
+    PLATFORM == "qemu", reason="QEMU only supports #cloud-config header"
+)
 @pytest.mark.user_data(USER_DATA)
 def test_runcmd_with_variable_substitution(client: IntegrationInstance):
     """Test jinja substitution.
@@ -68,6 +73,7 @@ def test_substitution_in_etc_cloud(client: IntegrationInstance):
 
     log = client.read_from_file("/var/log/cloud-init.log")
     verify_clean_log(log)
+    verify_clean_boot(client)
 
     # Ensure /etc/cloud/cloud.cfg template works as expected
     hostname = client.execute("hostname").stdout.strip()

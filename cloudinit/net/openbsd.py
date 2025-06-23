@@ -1,16 +1,16 @@
 # This file is part of cloud-init. See LICENSE file for license information.
 
+import logging
 import platform
 
 import cloudinit.net.bsd
-from cloudinit import log as logging
 from cloudinit import net, subp, util
 
 LOG = logging.getLogger(__name__)
 
 
 class Renderer(cloudinit.net.bsd.BSDRenderer):
-    def write_config(self):
+    def write_config(self, target=None):
         for device_name, v in self.interface_configurations.items():
             if_file = "etc/hostname.{}".format(device_name)
             fn = subp.target_path(self.target, if_file)
@@ -27,7 +27,7 @@ class Renderer(cloudinit.net.bsd.BSDRenderer):
                     )
                 mtu = v.get("mtu")
                 if mtu:
-                    content += " mtu %d" % mtu
+                    content += "\nmtu %d" % mtu
                 content += "\n" + self.interface_routes
             util.write_file(fn, content)
 

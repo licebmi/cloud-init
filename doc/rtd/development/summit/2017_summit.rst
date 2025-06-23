@@ -6,10 +6,8 @@ cloud-init: Summit in Seattle, Washington
    This article was written by Joshua Powers and `originally published`_ on 31
    August 2017. It is shared here `under license`_ with no changes.
 
-.. image:: 2017_seattle.jpg
-   :alt:
+.. image:: https://assets.ubuntu.com/v1/e4b097cf-2017_seattle.jpg
    :align: center
-   :scale: 70%
 
 Last week the cloud-init development team from Canonical ran a two-day summit
 in Seattle, Washington. The purpose of the summit was to meet with contributors
@@ -22,8 +20,7 @@ cloud teams, as well as the maintainers of cloud-init from Red Hat, SUSE, and
 of course, Ubuntu. Special thanks go to Google for hosting us and to Microsoft
 for buying everyone dinner!
 
-.. image:: 2017_meeting.jpg
-   :alt:
+.. image:: https://assets.ubuntu.com/v1/8c221862-2017_meeting.jpg
    :align: center
 
 Demos
@@ -45,7 +42,7 @@ that they gave as a part of the summit:
   merge request CI process and encouraged this as a way for other OSes to
   participate.
 * **Using lxd for Rapid Development and Testing**: Scott demoed setting
-  userdata when launching a lxd instance and how this can be used in the
+  user-data when launching a lxd instance and how this can be used in the
   development process. He also discussed lxd image remotes and types of images.
 
 Breakout Sessions
@@ -55,7 +52,7 @@ In addition to the prepared demos, the summit had numerous sessions that were
 requested by the attendees as additional topics for discussion:
 
 * Netplan (v2 YAML) as primary format
-* How to query metadata
+* How to query instance-data
 * Version numbering
 * Device hot-plug
 * Python 3
@@ -65,8 +62,7 @@ During the summit, we took time to have merge review and bug squashing time.
 During this time, attendees came with outstanding bugs to discuss possible
 fixes as well as go through outstanding merge requests and get live reviews.
 
-.. image:: 2017_bridge.jpg
-   :alt:
+.. image:: https://assets.ubuntu.com/v1/ac44f440-2017_bridge.jpg
    :align: center
 
 Conclusions

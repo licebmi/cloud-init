@@ -1,7 +1,12 @@
 .. _yaml_examples:
 
-Cloud config examples
-*********************
+All cloud config examples
+*************************
+
+.. note::
+   This page is a summary containing all the cloud config YAML examples
+   together. If you would like to explore examples by operation or process
+   instead, refer to the :ref:`examples library <examples_library>`.
 
 Including users and groups
 ==========================
@@ -77,6 +82,13 @@ Run commands on first boot
    :language: yaml
    :linenos:
 
+Run commands on very early at every boot
+========================================
+
+.. literalinclude:: ../../examples/boothook.txt
+   :language: bash
+   :linenos:
+
 Install arbitrary packages
 ==========================
 
@@ -105,8 +117,8 @@ Adjust mount points mounted
    :language: yaml
    :linenos:
 
-``Configure instance's SSH keys``
-=================================
+Configure instance's SSH keys
+=============================
 
 .. literalinclude:: ../../examples/cloud-config-ssh-keys.txt
    :language: yaml
@@ -143,3 +155,4 @@ Create partitions and filesystems
 .. _chef: http://www.chef.io/chef/
 .. _puppet: http://puppetlabs.com/
 .. _ansible: https://docs.ansible.com/ansible/latest/
+
